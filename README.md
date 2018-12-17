@@ -137,8 +137,8 @@ $ python exp3.py<br>
 $ whoami<br>
 [用户名] <br><br>
 
-##linux_64
-###linux_64溢出攻击（利用辅助函数）
+## linux_64
+### linux_64溢出攻击（利用辅助函数）
 $ gcc -fno-stack-protector level3.c -o level3<br>
 $ python pattern.py create 150 > payload<br>
 $ gdb ./level3<br>
