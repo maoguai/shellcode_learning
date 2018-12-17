@@ -170,3 +170,29 @@ python exp5.py<br>
 [ * ] Switching to interactive mode<br>
 $ whoami<br>
 [用户名] <br><br>
+
+### 使用工具寻找gadgets
+这里只使用了ROPgadget，初次之外还有一些知名的工具：
+1. ROPEME: https://github.com/packz/ropeme
+2. Ropper: https://github.com/sashs/Ropper
+3. ROPgadget: https://github.com/JonathanSalwan/ROPgadget/tree/master
+4. rp++: https://github.com/0vercl0k/rp
+<br>
+gcc -fno-stack-protector level4.c -o level4 -ldl<br>
+$ ROPgadget --binary libc.so.6 --only "pop|ret" | grep rdi<br>
+0x0000000000020256 : pop rdi ; pop rbp ; ret<br>
+0x0000000000021102 : pop rdi ; ret<br>
+$ python exp6.py<br>
+[*] '/home/dzh/learning/libc.so.6'<br>
+$ whoami
+[用户名] <br><br>
+
+
+
+
+
+
+
+
+
+
