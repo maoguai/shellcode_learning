@@ -110,6 +110,6 @@ $ objdump -d level2 | grep vulnerable_function0804843b <vulnerable_function>:<br
  8048471:	e8 c5 ff ff ff       	call   804843b <vulnerable_function><br>
 $ python exp3.py<br>
 [ * ].......<br>
-[ * ] Switching to interactive mode
-$ whoami
+[ * ] Switching to interactive mode<br>
+$ whoami<br>
 [用户名] <br><br>
