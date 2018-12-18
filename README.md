@@ -108,6 +108,7 @@ $ python exp2.py<br>
 [*] Switching to interactive mode<br>
 $ whoami<br>
 [用户名] <br><br>
+更多Ret2libc可以参考 https://blog.csdn.net/linyt/article/details/43643499
   
 ### ROP– Bypass DEP and ASLR 通过ROP绕过DEP和ASLR防护
 接下来我们再打开ASLR保护：<br>
