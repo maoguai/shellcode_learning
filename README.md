@@ -165,6 +165,7 @@ $ python exp3.py<br>
 $ whoami<br>
 [用户名] <br><br>
 
+关于GOT和PLT的更多消息： https://blog.csdn.net/linyt/article/details/51635768 <br><br><br>
 ## linux_64
 linux_64与linux_86的区别主要有两点：首先是内存地址的范围由32位变成了64位。但是可以使用的内存地址不能大于0x00007fffffffffff，否则会抛出异常。其次是函数参数的传递方式发生了改变，x86中参数都是保存在栈上,但在x64中的前六个参数依次保存在RDI, RSI, RDX, RCX, R8和 R9中，如果还有更多的参数的话才会保存在栈上。<br><br>
 
