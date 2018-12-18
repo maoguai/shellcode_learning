@@ -155,7 +155,7 @@ OFFSET   TYPE              VALUE <br>
 使用ldd命令可以查看目标程序调用的so库。随后我们把libc.so拷贝到当前目录，因为我们的exp需要这个so文件来计算相对地址<br>
 $ ldd level2<br>
 $ cp /lib32/libc.so.6 libc.so<br>
-查看vulnerable_function地址<br>
+查看vulnerable_function地址，这里查看函数地址是因为我们想返回到这个地址，让我们可以继续执行缓冲区溢出<br>
 $ objdump -d level2 | grep vulnerable_function<br>
 0804843b <vulnerable_function>:<br>
  8048471:	e8 c5 ff ff ff       	call   804843b <vulnerable_function><br>
