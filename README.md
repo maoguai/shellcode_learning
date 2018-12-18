@@ -37,7 +37,7 @@ hex pattern decoded as: 6Ae7<br>
 140<br>
 PC覆盖的溢出点为140字节处，我们只需要构造一个“A”*140+ret(返回地址）的字符串就可以让PC执行ret上的代码了，这里使用execve ("/bin/sh")命令的语句作为shellcode，这个可以打开一个终端（见linux_86 exp1.py)。原理如下所示：<br>
 [shellcode][“AAAAAAAAAAAAAA”….][ret]<br>
-^-------------------------------<br>
+^------------------------------------<br>
 但在现实攻击中shellcode地址的位置并非这么简单。因为在gdb的调试环境会影响buf在内存中的位置，虽然我们关闭了ASLR，但这只能保证buf的地址在gdb的调试环境中不变，但当我们直接执行./level1的时候，buf的位置会固定在别的地址上。因此不能通过使用gdb调试目标程序，然后查看内存来确定shellcode的位置。<br>
 为了解决这个问题可以开启core dump，当程序内存出现错误的时候系统会生成一个core dump文件在tmp目录下，用gdb调试core文件就可以获取到真实的地址。<br>
 $ ulimit -c unlimited<br>
