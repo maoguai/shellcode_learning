@@ -13,6 +13,7 @@
 ## ROP攻击
 ROP的全称为Return-oriented programming（返回导向编程），这是一种高级的内存攻击技术可以用来绕过现代操作系统的各种通用防御（比如内存不可执行和代码签名等）。<br><br>
 ## linux_86
+具体参考 https://yq.aliyun.com/articles/58699 <br> 
 ### Control Flow Hijack 程序流劫持
 比较常见的程序流劫持就是栈溢出，格式化字符串攻击和堆溢出了。通过程序流劫持，攻击者可以控制PC指针从而执行目标代码。为了应对这种攻击，系统防御者也提出了各种防御方法，最常见的方法有DEP（堆栈不可执行），ASLR（内存地址随机化），Stack Protector（栈保护）等。<br>
 首先我们先关闭这些保护措施来实施一次攻击（c语言代码在linux_86,level1中）其中-fno-stack-protector关掉Stack Protector，-z execstack关掉DEP<br>
@@ -167,8 +168,8 @@ $ whoami<br>
 
 关于GOT和PLT的更多消息： https://blog.csdn.net/linyt/article/details/51635768 <br><br><br>
 ## linux_64
-linux_64与linux_86的区别主要有两点：首先是内存地址的范围由32位变成了64位。但是可以使用的内存地址不能大于0x00007fffffffffff，否则会抛出异常。其次是函数参数的传递方式发生了改变，x86中参数都是保存在栈上,但在x64中的前六个参数依次保存在RDI, RSI, RDX, RCX, R8和 R9中，如果还有更多的参数的话才会保存在栈上。<br><br>
-
+linux_64与linux_86的区别主要有两点：首先是内存地址的范围由32位变成了64位。但是可以使用的内存地址不能大于0x00007fffffffffff，否则会抛出异常。其次是函数参数的传递方式发生了改变，x86中参数都是保存在栈上,但在x64中的前六个参数依次保存在RDI, RSI, RDX, RCX, R8和 R9中，如果还有更多的参数的话才会保存在栈上。<br>
+具体参考http://www.vuln.cn/6644 和 http://www.itdaan.com/blog/2018/06/03/77fa932b210ca9370b06a160df4045f8.html （后面这个对过程讲解得更加详细）<br><br><br>
 ### linux_64溢出攻击（利用辅助函数）
 我们打开ASLR编译level3
 $ gcc -fno-stack-protector level3.c -o level3<br>
